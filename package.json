@@ -1,0 +1,16 @@
+{
+  "name": "youtubebackend",
+  "version": "1.0.0",
+  "description": "youtube clone",
+  "main": "index.js",
+  "scripts": {
+    "test": "chai or backend"
+  },
+  "keywords": [
+    "chai",
+    "backend",
+    "javascript"
+  ],
+  "author": "vikas kashyap",
+  "license": "ISC"
+}
