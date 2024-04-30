@@ -3,8 +3,9 @@
   "version": "1.0.0",
   "description": "youtube clone",
   "main": "index.js",
+  "type": "module",
   "scripts": {
-    "test": "chai or backend"
+    "dev": "nodemon src/index.js"
   },
   "keywords": [
     "chai",
@@ -12,5 +13,8 @@
     "javascript"
   ],
   "author": "vikas kashyap",
-  "license": "ISC"
+  "license": "ISC",
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
 }
