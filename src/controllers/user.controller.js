@@ -17,18 +17,17 @@ const registerUser = asyncHandler(async (req, res) => {
     send response
     */
 
-  const { userName, email, fullname, password } = req.body;
+  const { userName, email, fullName, password } = req.body;
 
+//   validatation of received data
   if (
-    [userName, email, fullname, password].some(
-      "field",
-      () => field?.trim() === ""
-    )
+    [userName, email, fullName, password].some((field) => field?.trim() === "")
   ) {
     throw new ApiError(400, "All fields are required");
   }
 
-  const existedUser = User.findOne({
+//   check if user already exist
+  const existedUser = await User.findOne({
     $or: [{ email }, { userName }],
   });
 
@@ -39,36 +38,46 @@ const registerUser = asyncHandler(async (req, res) => {
     );
   }
 
+// upload avatar & coverImage
   const avatarLocalPath = req.files?.avatar[0]?.path;
-  const coverImageLocalPath = req.files?.coverImage[0]?.path;
+//   const coverImageLocalPath = req.files?.coverImage[0]?.path;
 
+let coverImageLocalPath;
+if(req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length > 0){
+   coverImageLocalPath= req.files.coverImage[0].path
+}
+
+//     check for avatar upload or not
   if (!avatarLocalPath) {
     throw new ApiError(400, "Avatar is required");
   }
 
   const avatar = await uploadOnCloudinary(avatarLocalPath);
   const coverImage = await uploadOnCloudinary(coverImageLocalPath);
+
+  if (!avatar) {
+    throw new ApiError(400, "Avatar is required");
+  }
+
+//   save data to db
+  const user = await User.create({
+    fullName,
+    userName: userName.toLowerCase(),
+    email,
+    password,
+    avatar: avatar.url,
+    coverImage: coverImage?.url || "",
+  });
+
+    // send response but extract to password & refresh token   
+  const createdUser = await User.findById(user._id).select(
+    "-password -refreshToken"
+  );
+
+//   return res
+  return res
+    .status(201)
+    .json(new ApiResponse(200, createdUser, "User registered successfully"));
 });
-
-if (!avatar) {
-  throw new ApiError(400, "Avatar is required");
-}
-
-const user = await User.create({
-  fullname,
-  userName: userName.toLowerCase(),
-  email,
-  password,
-  avatar: avatar.url,
-  coverImage: coverImage?.url || "",
-});
-
-const createdUser = await User.findById(user._id).select(
-  "-password -refreshToken"
-);
-
-return res.status(201).json(
-    new ApiResponse(200, createdUser, "User registered successfully")
-)
 
 export { registerUser };
