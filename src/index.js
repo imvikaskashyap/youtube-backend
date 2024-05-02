@@ -11,6 +11,12 @@ dotenv.config({
 
 const port = process.env.PORT || 8000
 
+// for checking
+app.get("/",(req,res)=>{
+  res.send("ok")
+} )
+
+
 dbConnect()
 .then(()=>{
   app.listen(port, ()=>{
