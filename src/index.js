@@ -18,7 +18,7 @@ app.get("/", (req, res) => {
 dbConnect()
   .then(() => {
     app.listen(port, () => {
-      console.log(`App is listening on PORT : ${port}`);
+      console.log(`🛞  Server is listening on PORT  : ${port} 🌍`);
     });
 
     app.on("error", (error) => {

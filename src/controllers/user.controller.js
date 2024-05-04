@@ -3,8 +3,9 @@ import ApiError from "../utils/ApiError.js";
 import { User } from "../models/User.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
+import jwt from "jsonwebtoken";
 
-const generateAccessToken = async (userId) => {
+const generateTokens = async (userId) => {
   try {
     const user = await User.findById(userId);
     const accessToken = user.generateAccessToken();
@@ -113,11 +114,11 @@ const loginUser = asyncHandler(async (req, res) => {
   if ((!email || !userName) && !password) {
     throw new ApiError(400, "Email or Username is required");
   }
-  
+
   // check user exist or not
   const existedUser = await User.findOne({
-   $or:[{email},{userName}]
-  })
+    $or: [{ email }, { userName }],
+  });
 
   if (!existedUser) {
     throw new ApiError(404, "User not exist,Please register first");
@@ -129,9 +130,7 @@ const loginUser = asyncHandler(async (req, res) => {
     throw new ApiError(401, "Inavlid user credentials");
   }
 
-  const { accessToken, refreshToken } = await generateAccessToken(
-    existedUser._id
-  );
+  const { accessToken, refreshToken } = await generateTokens(existedUser._id);
 
   const loggedInUser = await User.findById(existedUser._id).select(
     "-password -refreshToken"
@@ -168,7 +167,7 @@ const logoutUser = asyncHandler(async (req, res) => {
       },
     },
     {
-      new: ture,
+      new: true,
     }
   );
 
@@ -184,4 +183,54 @@ const logoutUser = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, {}, "Logged Out Successfully"));
 });
 
-export { registerUser, loginUser, logoutUser };
+const refreshAccessToken = asyncHandler(async (req, res) => {
+  console.log(req.cookie.refreshToken)
+  const incomingRefreshToken = req.cookie.refreshToken || req.body.refreshToken;
+
+  if (!incomingRefreshToken) {
+    throw new ApiError(401, "Invalid Refresh token");
+  }
+try {
+  
+    const decodeToken = jwt.verify(
+      incomingRefreshToken,
+      process.env.REFRESH_TOKEN_SECRET
+    );
+  
+    const user = await User.findById(decodeToken?._id);
+  
+    if (!user) {
+      throw new ApiError(401, "Unauthorized error");
+    }
+  
+    if (incomingRefreshToken !== user.refreshToken) {
+      throw new ApiError(401, "Refresh token expired or used");
+    }
+  
+    const { refreshToken, accessToken } = await generateTokens(user._id);
+  
+    const options = {
+      httpOnly: true,
+      secure: true,
+    };
+  
+    res
+      .status(200)
+      .cookie("accessToken", accessToken, options)
+      .cookie("refreshToken", refreshToken, options)
+      .json(
+        new ApiResponse(
+          200,
+          {
+            refreshToken,
+            accessToken,
+          },
+          "Access Token Refreshed"
+        )
+      );
+} catch (error) {
+  throw new ApiError(401, error?.message || "Invalid refresh token")
+}
+});
+
+export { registerUser, loginUser, logoutUser,refreshAccessToken };
