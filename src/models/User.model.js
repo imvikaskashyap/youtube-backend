@@ -56,8 +56,11 @@ userSchema.pre("save", async function (next) {
 });
 
 userSchema.methods.isPasswordCorrect = async function (password) {
+  // console.log("Provided password:", typeof password);
+  // console.log("Stored password:", typeof this.password);
   return await bcrypt.compare(password, this.password);
 };
+
 
 userSchema.methods.generateAccessToken = function () {
   return jwt.sign(

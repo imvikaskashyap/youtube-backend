@@ -4,6 +4,19 @@ import { User } from "../models/User.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 
+const generateAccessToken = async (userId) => {
+  try {
+    const user = await User.findById(userId);
+    const accessToken = user.generateAccessToken();
+    const refreshToken = user.generateRefreshToken();
+
+    user.refreshToken = refreshToken;
+    user.save({ validateBeforeSave: false });
+
+    return { accessToken, refreshToken };
+  } catch (error) {}
+};
+
 const registerUser = asyncHandler(async (req, res) => {
   /*
     get user details
@@ -19,14 +32,14 @@ const registerUser = asyncHandler(async (req, res) => {
 
   const { userName, email, fullName, password } = req.body;
 
-//   validatation of received data
+  //   validatation of received data
   if (
     [userName, email, fullName, password].some((field) => field?.trim() === "")
   ) {
     throw new ApiError(400, "All fields are required");
   }
 
-//   check if user already exist
+  //   check if user already exist
   const existedUser = await User.findOne({
     $or: [{ email }, { userName }],
   });
@@ -38,16 +51,20 @@ const registerUser = asyncHandler(async (req, res) => {
     );
   }
 
-// upload avatar & coverImage
+  // upload avatar & coverImage
   const avatarLocalPath = req.files?.avatar[0]?.path;
-//   const coverImageLocalPath = req.files?.coverImage[0]?.path;
+  //   const coverImageLocalPath = req.files?.coverImage[0]?.path;
 
-let coverImageLocalPath;
-if(req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length > 0){
-   coverImageLocalPath= req.files.coverImage[0].path
-}
+  let coverImageLocalPath;
+  if (
+    req.files &&
+    Array.isArray(req.files.coverImage) &&
+    req.files.coverImage.length > 0
+  ) {
+    coverImageLocalPath = req.files.coverImage[0].path;
+  }
 
-//     check for avatar upload or not
+  //     check for avatar upload or not
   if (!avatarLocalPath) {
     throw new ApiError(400, "Avatar is required");
   }
@@ -59,7 +76,7 @@ if(req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.leng
     throw new ApiError(400, "Avatar is required");
   }
 
-//   save data to db
+  //   save data to db
   const user = await User.create({
     fullName,
     userName: userName.toLowerCase(),
@@ -69,15 +86,102 @@ if(req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.leng
     coverImage: coverImage?.url || "",
   });
 
-    // send response but extract to password & refresh token   
+  // send response but extract to password & refresh token
   const createdUser = await User.findById(user._id).select(
     "-password -refreshToken"
   );
 
-//   return res
+  //   return res
   return res
     .status(201)
     .json(new ApiResponse(200, createdUser, "User registered successfully"));
 });
 
-export { registerUser };
+const loginUser = asyncHandler(async (req, res) => {
+  /*
+  get data by req.body
+  validate the data
+  check data exist or not
+  if user exist then check the password
+  generate refresh token and access token
+  send cookie
+  */
+
+  const { email, userName, password } = req.body;
+
+  // validation of recieved data
+  if ((!email || !userName) && !password) {
+    throw new ApiError(400, "Email or Username is required");
+  }
+  
+  // check user exist or not
+  const existedUser = await User.findOne({
+   $or:[{email},{userName}]
+  })
+
+  if (!existedUser) {
+    throw new ApiError(404, "User not exist,Please register first");
+  }
+
+  const isValidPassword = await existedUser.isPasswordCorrect(password);
+
+  if (!isValidPassword) {
+    throw new ApiError(401, "Inavlid user credentials");
+  }
+
+  const { accessToken, refreshToken } = await generateAccessToken(
+    existedUser._id
+  );
+
+  const loggedInUser = await User.findById(existedUser._id).select(
+    "-password -refreshToken"
+  );
+
+  const options = {
+    httpOnly: true,
+    secure: true,
+  };
+
+  return res
+    .status(200)
+    .cookie("refreshToken", refreshToken, options)
+    .cookie("accessToken", accessToken, options)
+    .json(
+      new ApiResponse(
+        200,
+        {
+          user: loggedInUser,
+          accessToken,
+          refreshToken,
+        },
+        "User Logged In successfully"
+      )
+    );
+});
+
+const logoutUser = asyncHandler(async (req, res) => {
+  await User.findByIdAndUpdate(
+    req.user?._id,
+    {
+      $set: {
+        accessToken: undefined,
+      },
+    },
+    {
+      new: ture,
+    }
+  );
+
+  const options = {
+    httpOnly: true,
+    secure: true,
+  };
+
+  res
+    .status(200)
+    .clearCookie("accessToken", options)
+    .clearCookie("refreshToken", options)
+    .json(new ApiResponse(200, {}, "Logged Out Successfully"));
+});
+
+export { registerUser, loginUser, logoutUser };
