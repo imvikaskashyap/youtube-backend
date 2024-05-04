@@ -184,36 +184,35 @@ const logoutUser = asyncHandler(async (req, res) => {
 });
 
 const refreshAccessToken = asyncHandler(async (req, res) => {
-  console.log(req.cookie.refreshToken)
+  console.log(req.cookie.refreshToken);
   const incomingRefreshToken = req.cookie.refreshToken || req.body.refreshToken;
 
   if (!incomingRefreshToken) {
     throw new ApiError(401, "Invalid Refresh token");
   }
-try {
-  
+  try {
     const decodeToken = jwt.verify(
       incomingRefreshToken,
       process.env.REFRESH_TOKEN_SECRET
     );
-  
+
     const user = await User.findById(decodeToken?._id);
-  
+
     if (!user) {
       throw new ApiError(401, "Unauthorized error");
     }
-  
+
     if (incomingRefreshToken !== user.refreshToken) {
       throw new ApiError(401, "Refresh token expired or used");
     }
-  
+
     const { refreshToken, accessToken } = await generateTokens(user._id);
-  
+
     const options = {
       httpOnly: true,
       secure: true,
     };
-  
+
     res
       .status(200)
       .cookie("accessToken", accessToken, options)
@@ -228,9 +227,28 @@ try {
           "Access Token Refreshed"
         )
       );
-} catch (error) {
-  throw new ApiError(401, error?.message || "Invalid refresh token")
-}
+  } catch (error) {
+    throw new ApiError(401, error?.message || "Invalid refresh token");
+  }
 });
 
-export { registerUser, loginUser, logoutUser,refreshAccessToken };
+const changeUserPassword = asyncHandler(async (req, res) => {
+  const { oldPassword, newPassword } = req.body;
+  console.log(req.user._id)
+  const user = await User.findById(req.user?._id);
+
+  console.log(user)
+
+  const isPasswordCorrect = await user.isPasswordCorrect(oldPassword);
+
+  if (!isPasswordCorrect) {
+    throw new ApiError(400, "Old Password is Incorrect");
+  }
+
+  user.password = newPassword;
+await  user.save({validateBeforeSave:false});
+
+ return res.status(200).json(new ApiResponse(200, {}, "Password Changes Successfully"));
+});
+
+export { registerUser, loginUser, logoutUser, refreshAccessToken,changeUserPassword };
